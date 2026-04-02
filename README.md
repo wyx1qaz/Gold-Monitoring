@@ -1,89 +1,211 @@
-# SGE 溢价与黄金反转监控
+# SGE 溢价与黄金/美债监控
 
-本项目会从新浪财经轻量抓取以下实时数据：
+这是一个本地运行的监控面板，统一管理以下链路：
 
-- `nf_AU0` 沪金连续
-- `hf_XAU` 伦敦金（现货黄金）
-- `USDCNY` 美元人民币汇率
+- `SGE 溢价监控`
+- `黄金反转监控`
+- `美债收益率回落预警`
+- `RSS 事件抓取与打分`
+- `RSS ML 训练与状态查看`
+- `钉钉推送配置与发送记录`
 
-并按下面公式计算沪金相对伦敦金的溢价：
+前端入口默认是 `http://127.0.0.1:8000`。  
+数据持久化默认存放在 [data/monitor.db](C:/Users/25376/Documents/sge溢价监控/data/monitor.db)。
+
+## 快速上手
+
+### Windows
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+如果希望直接启动本地服务，也可以使用：
+
+```powershell
+start_server.bat
+```
+
+启动后访问：
+
+```text
+http://127.0.0.1:8000
+```
+
+## 功能概览
+
+### 1. SGE 溢价监控
+
+程序抓取以下实时数据：
+
+- `nf_AU0`
+- `hf_XAU`
+- `USDCNY`
+
+并按下面公式计算溢价：
 
 ```text
 伦敦金折算人民币/克 = 伦敦金(美元/盎司) * USDCNY / 31.1034768
 溢价(元/克) = 沪金(元/克) - 伦敦金折算人民币/克
 ```
 
-程序现在包含两条监控链路，并统一在新的前端中台页面里管理：
+当沪金与国际金处于交易时段，且溢价超过阈值时，可通过钉钉机器人发送预警。
 
-- `SGE 溢价监控`：当且仅当沪金和伦敦金都处在开盘时段，且溢价超过设定阈值时，通过钉钉机器人 Webhook 推送预警。
-- `黄金反转监控`：从新浪盘面抓取现货金价格，并结合 RSS 事件源识别三类反转锚点。
-  - `price`：盘面反弹，现价高于最近低点一定比例，且重新站上短均线。
-  - `political`：最近 RSS 出现停火、谈判、斡旋等政治缓和关键词。
-  - `war`：最近 RSS 出现复航、恢复装船、重启出口、护航等战争进度关键词。
+### 2. 黄金反转监控
 
-前端支持：
+黄金反转综合以下条件：
 
-- 多级菜单：`总览`、`SGE 溢价`、`黄金反转`、`RSS 源`、`推送设置`、`系统状态`
-- 可配置 RSS 源地址列表
-- 可配置 RSS 抓取频率
-- 可配置多组 `webhook + secret` 推送目标
-- RSS 分类展示、关键词展示和手动测试推送
+- `price`：盘面反弹，价格高于最近低点一定比例，且重新站上短均线
+- `political`：RSS 中命中停火、谈判、缓和等关键词
+- `war`：RSS 中命中复航、恢复出口、航运恢复等关键词
+- `us10y`：美债回落信号可作为联动条件参与状态展示
 
-反转信号分三级：
+反转等级：
 
-- `一级`：`price + political + war` 三者同时触发
-- `二级`：三者中任意两项触发
-- `三级`：三者中任意一项触发
+- `1级`：三项主条件同时触发
+- `2级`：任意两项触发
+- `3级`：任意一项触发
+- `4级`：仅记录，不推送
 
-所有抓取记录、溢价记录、RSS 事件和预警记录都会落到本地 SQLite。
+### 3. 美债收益率回落预警
 
-## 运行
+支持多期限监控：
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+- `5Y`
+- `10Y`
+- `20Y`
 
-浏览器打开 `http://127.0.0.1:8000`。
+可配置参数：
+
+- 采样频率（秒）
+- 回落窗口（小时）
+- 回落阈值（bp）
+- 预警冷却（秒）
+- 重复发送抑制（小时）
+- 启用期限（5Y / 10Y / 20Y）
+
+推送逻辑包含两层限制：
+
+- `预警冷却`：距离上次成功发送不足指定秒数时不再发送
+- `重复发送抑制`：触发时若过去 N 小时内已经成功发送过，则直接取消发送
+
+默认重复发送抑制为 `4` 小时，可在前端页面直接调整。
+
+### 4. 图表与交互
+
+当前图表行为：
+
+- `1H / 1D / 1W` 区间切换
+- `1W` 下黄金与美债历史会自动下采样，减少前端渲染压力
+- 美债联动图鼠标悬浮时会统一返回四个值：
+- `Gold`
+- `US 5Y`
+- `US 10Y`
+- `US 20Y`
+- 美债联动图支持纵轴滚轮缩放
+
+### 5. RSS 与 ML
+
+系统支持：
+
+- 多 RSS 源配置
+- RSS 抓取频率配置
+- RSS 事件入库
+- 事件去重
+- RSS ML 配置、训练、暂停、恢复、取消
+- 训练状态、Loss/Accuracy 曲线与最近训练记录展示
+
+## 页面结构
+
+当前前端主要页面：
+
+- `总览`
+- `SGE 溢价`
+- `盘面预警`
+- `十年期美债反转`
+- `政治与战争预警`
+- `RSS 源`
+- `推送设置`
+- `系统状态`
 
 ## 默认配置
 
-- 阈值：`20` 元/克
-- 抓取频率：`60` 秒
-- RSS 抓取频率：`300` 秒
-- 预警冷却：`900` 秒
-- 请求超时：`10` 秒
-- 黄金反转冷却：`1800` 秒
-- 反转盘面回看：`360` 分钟
-- 反转最小反弹：`1.2%`
-- 反转短均线窗口：`15` 个样本
-- RSS 信号有效期：`180` 分钟
+### SGE
 
-这些配置都会持久化保存。原有页面仍可改 SGE 参数；黄金反转参数可以通过 API 更新。
+| 配置项 | 默认值 |
+| --- | --- |
+| 溢价阈值 | `20` |
+| 采样频率 | `60s` |
+| 预警冷却 | `900s` |
+| 请求超时 | `10s` |
 
-## 反转监控 API
+### 黄金反转
 
-- `GET /api/reversal/status`：查看最新反转样本、最近告警、最近 RSS 事件和运行状态
-- `GET /api/reversal/history?range=1D`：查看最近 1H / 1D / 1W 的反转样本
-- `GET /api/reversal/events?event_type=political`：查看最近 RSS 命中的政治或战争事件
-- `PUT /api/reversal/settings`：更新反转监控配置
-- `POST /api/reversal/test-alert`：发送一级 / 二级 / 三级测试推送
-- `POST /api/reversal/run-once`：仅执行一次黄金反转监控
+| 配置项 | 默认值 |
+| --- | --- |
+| 冷却 | `1800s` |
+| 价格回看 | `360 分钟` |
+| 最小反弹 | `1.2%` |
+| 短均线窗口 | `15` |
+| 信号有效窗口 | `180 分钟` |
 
-示例：
+### 美债
 
-```bash
-curl -X PUT http://127.0.0.1:8000/api/reversal/settings ^
-  -H "Content-Type: application/json" ^
-  -d "{\"dingtalk_webhook\":\"https://oapi.dingtalk.com/robot/send?access_token=...\",\"dingtalk_at_user_ids\":[\"user123\"],\"rss_feed_urls\":[\"https://feeds.bbci.co.uk/news/world/middle_east/rss.xml\"]}"
-```
+| 配置项 | 默认值 |
+| --- | --- |
+| 采样频率 | `60s` |
+| 回落窗口 | `24h` |
+| 回落阈值 | `1.0bp` |
+| 预警冷却 | `1800s` |
+| 重复发送抑制 | `4h` |
+| 默认期限 | `10Y` |
+
+## API 摘要
+
+### 基础状态
+
+- `GET /api/status`
+- `GET /api/settings`
+- `PUT /api/settings`
+- `POST /api/run-once`
+
+### 黄金反转
+
+- `GET /api/reversal/status`
+- `GET /api/reversal/history?range=1D`
+- `GET /api/reversal/history?range=1W&stride=20`
+- `GET /api/reversal/events`
+- `PUT /api/reversal/settings`
+- `POST /api/reversal/run-once`
+- `POST /api/reversal/test-alert`
+- `POST /api/reversal/rss-run-once`
+- `POST /api/reversal/rss-bulk-fill`
+- `POST /api/reversal/rss-dedup`
+
+### 美债
+
+- `GET /api/us10y/status`
+- `GET /api/us10y/history?range=1D`
+- `GET /api/us10y/history?range=1W&stride=20`
+- `POST /api/us10y/run-once`
+
+### RSS ML
+
+- `GET /api/rss-ml/status`
+- `PUT /api/rss-ml/config`
+- `POST /api/rss-ml/train`
+- `GET /api/rss-ml/train-status`
+- `POST /api/rss-ml/train-control`
+- `POST /api/rss-ml/clear-samples`
+- `POST /api/rss-ml/sync-csv`
 
 ## 说明
 
-- 沪金开盘时段按上期所黄金常见交易时段处理：`09:00-11:30`、`13:30-15:00`、`21:00-02:30`。
-- 伦敦金开盘时段按纽约时间 `周日 17:00` 开盘、`周五 17:00` 收盘处理，自动兼容夏令时。
-- 节假日未接入交易所日历，因此法定休市日仍可能被判定为交易日时间段。
-- 数据库存放在 `data/monitor.db`。
-- RSS 默认源是公开 RSS，可按你的使用习惯替换成更贴近交易的源。
+- 数据库文件默认位于 [data/monitor.db](C:/Users/25376/Documents/sge溢价监控/data/monitor.db)
+- 美债数据源按优先级尝试：`Eastmoney -> 新浪 -> FRED`
+- `1W` 图表接口支持 `stride` 参数，前端默认在长周期下启用采样
+- 推送发送记录会写入 `notification_logs`
+- 美债重复发送抑制只针对“成功发送过”的历史记录生效
