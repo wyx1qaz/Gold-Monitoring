@@ -1,16 +1,21 @@
-# SGE 溢价与黄金/美债监控
+# SGE 溢价、盘面、美债、政治战争监控
 
-这是一个本地运行的监控面板，统一管理以下链路：
+这是一个本地运行的监控面板，当前围绕四个核心模块组织：
 
-- `SGE 溢价监控`
-- `黄金反转监控`
-- `美债收益率回落预警`
-- `RSS 事件抓取与打分`
+- `SGE 溢价`
+- `盘面预警`
+- `十年期美债反转`
+- `政治与战争预警`
+
+系统同时集成了：
+
+- `RSS 源管理`
 - `RSS ML 训练与状态查看`
 - `钉钉推送配置与发送记录`
+- `系统状态与运行记录`
 
 前端入口默认是 `http://127.0.0.1:8000`。  
-数据持久化默认存放在 [data/monitor.db](C:/Users/25376/Documents/sge溢价监控/data/monitor.db)。
+数据默认持久化到 [data/monitor.db](C:/Users/25376/Documents/sge溢价监控/data/monitor.db)。
 
 ## 快速上手
 
@@ -23,7 +28,7 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-如果希望直接启动本地服务，也可以使用：
+也可以直接使用：
 
 ```powershell
 start_server.bat
@@ -35,9 +40,84 @@ start_server.bat
 http://127.0.0.1:8000
 ```
 
+## 当前页面结构
+
+前端当前主要页面为：
+
+- `总览`
+- `SGE 溢价`
+- `盘面预警`
+- `十年期美债反转`
+- `政治与战争预警`
+- `RSS 源`
+- `推送设置`
+- `系统状态`
+
+## 页面与接口对照
+
+### 总览
+
+- `GET /api/status`
+- `GET /api/reversal/status`
+- `GET /api/us10y/status`
+- `GET /api/notification/logs`
+
+### SGE 溢价
+
+- `GET /api/status`
+- `GET /api/history?range=1D`
+- `PUT /api/settings`
+- `POST /api/run-once`
+
+### 盘面预警
+
+- `GET /api/reversal/status`
+- `GET /api/reversal/history?range=1D`
+- `GET /api/reversal/history?range=1W&stride=20`
+- `PUT /api/reversal/settings`
+- `POST /api/reversal/run-once`
+- `POST /api/reversal/test-alert`
+
+### 十年期美债反转
+
+- `GET /api/us10y/status`
+- `GET /api/us10y/history?range=1D`
+- `GET /api/us10y/history?range=1W&stride=20`
+- `PUT /api/reversal/settings`
+- `POST /api/us10y/run-once`
+
+### 政治与战争预警
+
+- `GET /api/reversal/events`
+- `GET /api/rss-ml/status`
+- `PUT /api/rss-ml/config`
+- `POST /api/rss-ml/train`
+- `GET /api/rss-ml/train-status`
+- `POST /api/rss-ml/train-control`
+- `POST /api/reversal/rss-run-once`
+- `POST /api/reversal/rss-bulk-fill`
+- `POST /api/reversal/rss-dedup`
+
+### RSS 源
+
+- `GET /api/settings`
+- `PUT /api/settings`
+
+### 推送设置
+
+- `GET /api/settings`
+- `PUT /api/settings`
+- `GET /api/notification/logs`
+
+### 系统状态
+
+- `GET /api/status`
+- `GET /api/reversal/status`
+- `GET /api/us10y/status`
+
 ## 功能概览
 
-### 1. SGE 溢价监控
+### 1. SGE 溢价
 
 程序抓取以下实时数据：
 
@@ -52,25 +132,27 @@ http://127.0.0.1:8000
 溢价(元/克) = 沪金(元/克) - 伦敦金折算人民币/克
 ```
 
-当沪金与国际金处于交易时段，且溢价超过阈值时，可通过钉钉机器人发送预警。
+当沪金和国际金都处于交易时段，且溢价超过阈值时，可通过钉钉机器人发送 `SGE 溢价预警`。
 
-### 2. 黄金反转监控
+### 2. 盘面预警
 
-黄金反转综合以下条件：
+盘面预警围绕黄金反转样本构建，综合以下条件：
 
 - `price`：盘面反弹，价格高于最近低点一定比例，且重新站上短均线
 - `political`：RSS 中命中停火、谈判、缓和等关键词
 - `war`：RSS 中命中复航、恢复出口、航运恢复等关键词
-- `us10y`：美债回落信号可作为联动条件参与状态展示
+- `us10y`：美债回落信号可作为联动信息参与状态展示
 
-反转等级：
+当前盘面预警是 `4级`：
 
-- `1级`：三项主条件同时触发
-- `2级`：任意两项触发
-- `3级`：任意一项触发
+- `1级`：最强信号
+- `2级`：较强信号
+- `3级`：弱信号
 - `4级`：仅记录，不推送
 
-### 3. 美债收益率回落预警
+后端当前只对 `1级 / 2级` 进入推送流程，`3级 / 4级` 只记录。
+
+### 3. 十年期美债反转
 
 支持多期限监控：
 
@@ -94,46 +176,38 @@ http://127.0.0.1:8000
 
 默认重复发送抑制为 `4` 小时，可在前端页面直接调整。
 
-### 4. 图表与交互
+### 4. 政治与战争预警
+
+这一页主要承接 RSS 事件流与新闻语义判断，支持：
+
+- RSS 抓取入库
+- 事件流展示
+- 关键词命中展示
+- 去重
+- RSS ML 配置、训练、暂停、恢复、取消
+- 训练状态与 Loss / Accuracy 曲线展示
+
+## 图表与交互
 
 当前图表行为：
 
-- `1H / 1D / 1W` 区间切换
+- 支持 `1H / 1D / 1W` 切换
 - `1W` 下黄金与美债历史会自动下采样，减少前端渲染压力
-- 美债联动图鼠标悬浮时会统一返回四个值：
+- 美债联动图鼠标悬浮时统一返回四个值：
 - `Gold`
 - `US 5Y`
 - `US 10Y`
 - `US 20Y`
 - 美债联动图支持纵轴滚轮缩放
 
-### 5. RSS 与 ML
+对应接口也支持长周期采样：
 
-系统支持：
-
-- 多 RSS 源配置
-- RSS 抓取频率配置
-- RSS 事件入库
-- 事件去重
-- RSS ML 配置、训练、暂停、恢复、取消
-- 训练状态、Loss/Accuracy 曲线与最近训练记录展示
-
-## 页面结构
-
-当前前端主要页面：
-
-- `总览`
-- `SGE 溢价`
-- `盘面预警`
-- `十年期美债反转`
-- `政治与战争预警`
-- `RSS 源`
-- `推送设置`
-- `系统状态`
+- `GET /api/reversal/history?range=1W&stride=20`
+- `GET /api/us10y/history?range=1W&stride=20`
 
 ## 默认配置
 
-### SGE
+### SGE 溢价
 
 | 配置项 | 默认值 |
 | --- | --- |
@@ -142,7 +216,7 @@ http://127.0.0.1:8000
 | 预警冷却 | `900s` |
 | 请求超时 | `10s` |
 
-### 黄金反转
+### 盘面预警
 
 | 配置项 | 默认值 |
 | --- | --- |
@@ -172,7 +246,7 @@ http://127.0.0.1:8000
 - `PUT /api/settings`
 - `POST /api/run-once`
 
-### 黄金反转
+### 盘面预警
 
 - `GET /api/reversal/status`
 - `GET /api/reversal/history?range=1D`
