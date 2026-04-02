@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>黄金监控中台</title>
+    <link rel="stylesheet" href="/static/styles.css?v=0.30.5" />
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <p class="eyebrow">Gold Monitoring Desk</p>
+          <h1>黄金监控中台</h1>
+          <p class="subtitle">溢价、反转、RSS 和推送配置统一管理。</p>
+        </div>
+        <nav class="menu">
+          <button class="menu-btn active" data-view="overview">总览</button>
+          <button class="menu-btn" data-view="goldWarning">黄金反转预警</button>
+          <div class="menu-sub">
+            <button class="menu-btn sub-menu-btn" data-view="sge">SGE溢价</button>
+            <button class="menu-btn sub-menu-btn" data-view="reversal">盘面预警</button>
+            <button class="menu-btn sub-menu-btn" data-view="us10y">十年期美债反转</button>
+            <button class="menu-btn sub-menu-btn" data-view="geoWarning">政治与战争预警</button>
+          </div>
+          <button class="menu-btn" data-view="otherWarning">其他预警</button>
+          <button class="menu-btn" data-view="feeds">RSS 源</button>
+          <button class="menu-btn" data-view="push">推送设置</button>
+          <button class="menu-btn" data-view="system">系统状态</button>
+        </nav>
+        <div class="sidebar-actions">
+          <button id="runAllBtn" class="primary-btn">立即获取RSS和盘面信息</button>
+          <button id="runReversalBtn" class="ghost-btn">仅跑反转</button>
+          <button id="refreshBtn" class="ghost-btn">刷新页面</button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Shanghai vs London + Reversal Engine</p>
+            <h2 id="heroTitle">总览</h2>
+            <p id="heroDesc" class="hero-copy">同时查看 SGE 溢价、黄金反转等级、RSS 命中和推送状态。</p>
+          </div>
+          <div class="hero-meta">
+            <div class="hero-tools">
+              <span class="version-pill">版本 <strong id="appVersionText">0.2</strong></span>
+              <button id="updateLogBtn" class="ghost-btn">更新记录</button>
+            </div>
+            <div class="hero-pill">
+              <span>任务状态</span>
+              <strong id="schedulerBadge">等待初始化</strong>
+            </div>
+            <div class="hero-pill">
+              <span>下次执行</span>
+              <strong id="nextRunText">--</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="view active" data-view-panel="overview">
+          <div class="stats-grid">
+            <article class="panel stat-card">
+              <span class="label">最新溢价</span>
+              <strong id="overviewPremiumValue">--</strong>
+              <span id="overviewPremiumMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">反转等级</span>
+              <strong id="overviewSignalValue">--</strong>
+              <span id="overviewSignalMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">触发条件</span>
+              <strong id="overviewConditionsValue">--</strong>
+              <span id="overviewConditionsMeta" class="muted">price / political / war / us10y</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">活跃 RSS 源</span>
+              <strong id="overviewFeedCount">0</strong>
+              <span id="overviewFeedMeta" class="muted">等待配置</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">推送组</span>
+              <strong id="overviewTargetCount">0</strong>
+              <span id="overviewTargetMeta" class="muted">未配置</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">最近 RSS 抓取</span>
+              <strong id="overviewRssValue">--</strong>
+              <span id="overviewRssMeta" class="muted">等待抓取</span>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel chart-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>SGE 溢价走势</h3>
+                  <p class="muted">人民币金价、国际金折算与溢价曲线</p>
+                </div>
+                <div class="range-switch">
+                  <button data-chart="sge" data-range="1H" class="range-btn">1H</button>
+                  <button data-chart="sge" data-range="1D" class="range-btn active">1D</button>
+                  <button data-chart="sge" data-range="1W" class="range-btn">1W</button>
+                </div>
+              </div>
+              <div id="sgeChart" class="chart large"></div>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>黄金反转监控</h3>
+                  <p class="muted">现货金价格与三级信号等级</p>
+                </div>
+                <div class="panel-actions">
+                  <div class="range-switch">
+                    <button data-chart="reversal" data-range="1H" class="range-btn">1H</button>
+                    <button data-chart="reversal" data-range="1D" class="range-btn active">1D</button>
+                    <button data-chart="reversal" data-range="1W" class="range-btn">1W</button>
+                  </div>
+                  <div id="signalBadge" class="signal-pill level-0">无信号</div>
+                </div>
+              </div>
+              <div id="reversalChart" class="chart large"></div>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近预警</h3>
+                <span class="muted">SGE 与黄金反转分开记录</span>
+              </div>
+              <div class="subsection">
+                <h4>SGE 预警</h4>
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>溢价</th>
+                        <th>结果</th>
+                      </tr>
+                    </thead>
+                    <tbody id="overviewSgeAlerts"></tbody>
+                  </table>
+                </div>
+                <div id="overviewSgeAlertsPager" class="pager"></div>
+              </div>
+              <div class="subsection">
+                <h4>反转预警</h4>
+                <div class="table-wrap compact">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>时间</th>
+                        <th>等级</th>
+                        <th>条件</th>
+                        <th>结果</th>
+                      </tr>
+                    </thead>
+                    <tbody id="overviewReversalAlerts"></tbody>
+                  </table>
+                </div>
+                <div id="overviewReversalAlertsPager" class="pager"></div>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>RSS 命中分类</h3>
+                <span class="muted">只展示命中反转上下文的内容</span>
+              </div>
+              <div class="rss-filter">
+                <button class="filter-btn active" data-event-filter="all">全部</button>
+                <button class="filter-btn" data-event-filter="political">政治缓和</button>
+                <button class="filter-btn" data-event-filter="war">战争进度</button>
+              </div>
+              <div id="overviewEvents" class="event-list"></div>
+              <div id="overviewEventsPager" class="pager"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="otherWarning">
+          <article class="panel" style="padding:20px;">
+            <h3 style="margin:0 0 8px;">其他预警</h3>
+            <p class="muted" style="margin:0;">预留模块，后续可继续扩展。</p>
+          </article>
+        </section>
+
+        <section class="view" data-view-panel="sge">
+          <div class="grid layout-3-2">
+            <article class="panel chart-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>SGE 溢价图表</h3>
+                  <p class="muted">用于看盘和确认人民币金相对国际金的溢价环境</p>
+                </div>
+                <div class="range-switch">
+                  <button data-chart="sge" data-range="1H" class="range-btn">1H</button>
+                  <button data-chart="sge" data-range="1D" class="range-btn active">1D</button>
+                  <button data-chart="sge" data-range="1W" class="range-btn">1W</button>
+                </div>
+              </div>
+              <div id="sgeDetailChart" class="chart xlarge"></div>
+            </article>
+
+            <article class="panel form-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>SGE 参数</h3>
+                  <p class="muted">只影响溢价监控，不改 RSS 和推送组</p>
+                </div>
+              </div>
+              <form id="sgeSettingsForm" class="settings-form">
+                <label>
+                  <span>溢价阈值 (元/克)</span>
+                  <input id="thresholdInput" type="number" step="0.1" min="0" />
+                </label>
+                <label>
+                  <span>主轮询频率 (秒)</span>
+                  <input id="intervalInput" type="number" min="5" />
+                </label>
+                <label>
+                  <span>SGE 预警冷却 (秒)</span>
+                  <input id="cooldownInput" type="number" min="0" />
+                </label>
+                <label>
+                  <span>请求超时 (秒)</span>
+                  <input id="timeoutInput" type="number" step="0.5" min="1" />
+                </label>
+                <button type="submit" class="primary-btn">保存 SGE 设置</button>
+              </form>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近溢价记录</h3>
+                <span class="muted">未同时开盘时会跳过告警</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>人民币金价</th>
+                      <th>国际金折算</th>
+                      <th>溢价</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="samplesBody"></tbody>
+                </table>
+              </div>
+              <div id="samplesPager" class="pager"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近 SGE 预警</h3>
+                <span class="muted">只有超过阈值才推送</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>溢价</th>
+                      <th>阈值</th>
+                      <th>结果</th>
+                    </tr>
+                  </thead>
+                  <tbody id="alertsBody"></tbody>
+                </table>
+              </div>
+              <div id="alertsPager" class="pager"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="reversal">
+          <div class="stats-grid reversal-grid">
+            <article class="panel stat-card">
+              <span class="label">最新反转等级</span>
+              <strong id="reversalLevelValue">无信号</strong>
+              <span id="reversalLevelMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">现货金</span>
+              <strong id="reversalGoldValue">--</strong>
+              <span class="muted">美元 / 盎司</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">USDCNY</span>
+              <strong id="reversalFxValue">--</strong>
+              <span class="muted">汇率</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">触发条件</span>
+              <strong id="reversalConditionsValue">--</strong>
+              <span class="muted">price / political / war</span>
+            </article>
+          </div>
+
+          <div class="grid layout-3-2">
+            <article class="panel chart-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>反转图表</h3>
+                  <p class="muted">上方看价格，下方看 0 / 4 / 3 / 2 / 1 级信号</p>
+                </div>
+                <div class="panel-actions">
+                  <div class="range-switch">
+                    <button data-chart="reversal" data-range="1H" class="range-btn">1H</button>
+                    <button data-chart="reversal" data-range="1D" class="range-btn active">1D</button>
+                    <button data-chart="reversal" data-range="1W" class="range-btn">1W</button>
+                  </div>
+                  <button id="testAlertBtn" class="ghost-btn">发送测试推送</button>
+                </div>
+              </div>
+              <div id="reversalDetailChart" class="chart xlarge"></div>
+            </article>
+
+            <article class="panel form-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>反转参数</h3>
+                  <p class="muted">盘面、RSS 和推送只在出现信号时触发</p>
+                </div>
+              </div>
+              <form id="reversalSettingsForm" class="settings-form">
+                <label>
+                  <span>反转信号冷却 (秒)</span>
+                  <input id="reversalCooldownInput" type="number" min="0" />
+                </label>
+                <label>
+                  <span>盘面回看窗口 (分钟)</span>
+                  <input id="reversalLookbackInput" type="number" min="30" />
+                </label>
+                <label>
+                  <span>最小反弹幅度 (%)</span>
+                  <input id="reversalReboundInput" type="number" step="0.1" min="0.1" />
+                </label>
+                <label>
+                  <span>短均线窗口 (样本数)</span>
+                  <input id="reversalMaInput" type="number" min="3" />
+                </label>
+                <label>
+                  <span>事件有效期 (分钟)</span>
+                  <input id="reversalSignalWindowInput" type="number" min="15" />
+                </label>
+                <div class="inline-form">
+                  <label>
+                    <span>测试信号等级</span>
+                    <select id="testAlertLevel">
+                      <option value="4">四级</option>
+                      <option value="3">三级</option>
+                      <option value="2">二级</option>
+                      <option value="1">一级</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>测试说明</span>
+                    <input id="testAlertNote" type="text" placeholder="可选" />
+                  </label>
+                </div>
+                <button type="submit" class="primary-btn">保存反转设置</button>
+              </form>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近反转样本</h3>
+                <span class="muted">等级: 1 最强，4 最弱，0 为无信号</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>金价</th>
+                      <th>等级</th>
+                      <th>条件</th>
+                      <th>说明</th>
+                    </tr>
+                  </thead>
+                  <tbody id="reversalSamplesBody"></tbody>
+                </table>
+              </div>
+              <div id="reversalSamplesPager" class="pager"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近反转预警</h3>
+                <span class="muted">仅等级 1 / 2 会推送，3 / 4 级只记录</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>等级</th>
+                      <th>条件</th>
+                      <th>结果</th>
+                    </tr>
+                  </thead>
+                  <tbody id="reversalAlertsBody"></tbody>
+                </table>
+              </div>
+              <div id="reversalAlertsPager" class="pager"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="us10y">
+          <div class="stats-grid reversal-grid">
+            <article class="panel stat-card">
+              <span class="label">十年期反转信号</span>
+              <strong id="us10ySignalValue">无信号</strong>
+              <span id="us10ySignalMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">10Y 收益率</span>
+              <strong id="us10yYieldValue">--</strong>
+              <span class="muted">%</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">数据源</span>
+              <strong id="us10ySourceValue">--</strong>
+              <span id="us10ySourceMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">与黄金联动</span>
+              <strong id="us10yLinkValue">--</strong>
+              <span class="muted">同屏观察金价与10Y</span>
+            </article>
+          </div>
+          <article class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <h3>黄金与10Y联动分析</h3>
+                <p class="muted">左轴黄金价格，右轴美债收益率（支持纵轴滚轮缩放）</p>
+              </div>
+              <div class="range-switch">
+                <button data-chart="us10y" data-range="1H" class="range-btn">1H</button>
+                <button data-chart="us10y" data-range="1D" class="range-btn active">1D</button>
+                <button data-chart="us10y" data-range="1W" class="range-btn">1W</button>
+              </div>
+            </div>
+            <div id="us10yLinkChart" class="chart xlarge"></div>
+          </article>
+          <article class="panel form-panel">
+            <div class="panel-head">
+              <div>
+                <h3>美债预警参数</h3>
+                <p class="muted">支持多期限采样与回落阈值设置</p>
+              </div>
+            </div>
+            <form id="us10ySettingsForm" class="settings-form">
+              <label>
+                <span>采样频率 (秒)</span>
+                <input id="us10yPollIntervalInput" type="number" min="5" />
+              </label>
+              <label>
+                <span>回落窗口 (小时)</span>
+                <input id="us10yDropLookbackHoursInput" type="number" min="1" step="1" />
+              </label>
+              <label>
+                <span>回落阈值 (bp)</span>
+                <input id="us10yDropThresholdBpInput" type="number" min="0.1" step="0.1" />
+              </label>
+              <label>
+                <span>预警冷却 (秒)</span>
+                <input id="us10yAlertCooldownInput" type="number" min="0" step="1" />
+              </label>
+              <label>
+                <span>重复发送抑制 (小时)</span>
+                <input id="us10yAlertDedupHoursInput" type="number" min="0" step="1" />
+              </label>
+              <div class="inline-form">
+                <label class="toggle-field">
+                  <span>5Y</span>
+                  <input id="us10yTenor5" type="checkbox" />
+                </label>
+                <label class="toggle-field">
+                  <span>10Y</span>
+                  <input id="us10yTenor10" type="checkbox" checked />
+                </label>
+                <label class="toggle-field">
+                  <span>20Y</span>
+                  <input id="us10yTenor20" type="checkbox" />
+                </label>
+              </div>
+              <div class="panel-actions">
+                <button id="runUs10yBtn" type="button" class="ghost-btn">立即采样美债</button>
+                <button type="submit" class="primary-btn">保存美债设置</button>
+              </div>
+            </form>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <h3>美债信源状态</h3>
+              <span class="muted">东方财富 → 新浪 → FRED 回退链路</span>
+            </div>
+            <ul id="us10ySourceStatusList" class="mini-list roomy"></ul>
+          </article>
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>最近10Y样本</h3>
+                <span class="muted">独立数据源维护</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>期限</th>
+                      <th>收益率%</th>
+                      <th>信号</th>
+                      <th>说明</th>
+                    </tr>
+                  </thead>
+                  <tbody id="us10ySamplesBody"></tbody>
+                </table>
+              </div>
+              <div id="us10ySamplesPager" class="pager"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <h3>10Y运行记录</h3>
+                <span class="muted">抓取与计算耗时</span>
+              </div>
+              <ul id="us10yRunsList" class="mini-list roomy"></ul>
+              <div id="us10yRunsPager" class="pager"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="geoWarning">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <h3>政治与战争事件流</h3>
+                <p class="muted">复用 RSS 事件流，并按 1-10 分对事件相关性打分（分越高，越有利黄金上涨动能；分越低，黄金越承压）</p>
+              </div>
+              <div class="rss-filter">
+                <button class="filter-btn active" data-event-filter="all">全部</button>
+                <button class="filter-btn" data-event-filter="political">政治缓和</button>
+                <button class="filter-btn" data-event-filter="war">战争进度</button>
+              </div>
+            </div>
+            <div class="subsection" style="padding-top:0;">
+              <p class="muted" style="margin:0 20px 8px;">说明：分越高，越有利黄金上涨动能；分越低，黄金越承压。</p>
+            </div>
+            <div id="geoEventList" class="event-list spacious"></div>
+            <div id="geoEventsPager" class="pager"></div>
+          </article>
+          <div class="grid two-col">
+            <article class="panel form-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>RSS ML 模型参数</h3>
+                  <p class="muted">支持手动训练，不用等到整百条</p>
+                </div>
+                <div class="panel-actions">
+                  <button id="trainRssMlBtn" type="button" class="ghost-btn">立即训练</button>
+                  <button id="pauseRssMlTrainBtn" type="button" class="ghost-btn">暂停训练</button>
+                  <button id="resumeRssMlTrainBtn" type="button" class="ghost-btn">继续训练</button>
+                  <button id="cancelRssMlTrainBtn" type="button" class="ghost-btn">取消训练</button>
+                  <button id="syncRssMlCsvBtn" type="button" class="ghost-btn">同步CSV样本</button>
+                  <button id="clearRssMlSamplesBtn" type="button" class="ghost-btn">清空样本</button>
+                  <button id="bulkFillRssBtn" type="button" class="ghost-btn">全量抓取测试</button>
+                  <button id="runRssDedupBtn" type="button" class="ghost-btn">&#x624B;&#x52A8;&#x53BB;&#x91CD;</button>
+                </div>
+              </div>
+              <form id="rssMlConfigForm" class="settings-form">
+                <label>
+                  <span>学习率</span>
+                  <input id="rssMlLearningRateInput" type="number" step="any" min="0.000001" max="1" />
+                </label>
+                <label>
+                  <span>最大轮数</span>
+                  <input id="rssMlMaxEpochsInput" type="number" min="20" max="2000" />
+                </label>
+                <label>
+                  <span>早停耐心轮数</span>
+                  <input id="rssMlEarlyStopInput" type="number" min="3" max="200" />
+                </label>
+                <label>
+                  <span>自动重训步长(条)</span>
+                  <input id="rssMlTrainStepSizeInput" type="number" min="10" max="1000" />
+                </label>
+                <label>
+                  <span>最小训练样本(条)</span>
+                  <input id="rssMlMinSamplesInput" type="number" min="10" max="1000" />
+                </label>
+                <label>
+                  <span>未来窗口(小时)</span>
+                  <select id="rssMlWindowHoursInput">
+                    <option value="1">1h</option>
+                    <option value="4">4h</option>
+                    <option value="24">24h</option>
+                  </select>
+                </label>
+                <label>
+                  <span>小幅阈值(%)</span>
+                  <input id="rssMlWeakMovePctInput" type="number" step="0.01" min="0.01" max="5" />
+                </label>
+                <label>
+                  <span>大幅阈值(%)</span>
+                  <input id="rssMlStrongMovePctInput" type="number" step="0.01" min="0.02" max="10" />
+                </label>
+                <label>
+                  <span>时效半衰期(小时)</span>
+                  <input id="rssMlDecayHalfLifeInput" type="number" step="1" min="1" max="240" />
+                </label>
+                <label>
+                  <span>标签模式</span>
+                  <select id="rssMlLabelModeInput">
+                    <option value="future_return">未来窗口收益打标</option>
+                    <option value="manual_score">手工评分打标</option>
+                  </select>
+                </label>
+                <div class="muted">训练输入列：仅新闻标题（不再使用价格与涨跌幅）。</div>
+                <label>
+                  <span>测试抓取轮数</span>
+                  <input id="rssBulkRoundsInput" type="number" min="1" max="20" value="3" />
+                </label>
+                <label class="inline-check">
+                  <input id="rssBulkIncludeUnmatchedInput" type="checkbox" checked />
+                  <span>全量入库（包含未命中分类）</span>
+                </label>
+                <button type="submit" class="primary-btn">保存模型参数</button>
+              </form>
+              <div class="ml-status-card" id="rssMlTrainStatusCard">
+                <div class="ml-status-head">
+                  <strong id="rssMlTrainStateText">待机</strong>
+                  <span class="muted" id="rssMlTrainStateTime">--</span>
+                </div>
+                <p id="rssMlTrainStateDesc" class="muted">点击“立即训练”后会显示后端返回状态。</p>
+                <div class="ml-progress">
+                  <div id="rssMlTrainProgressBar" class="ml-progress-bar"></div>
+                </div>
+                <pre id="rssMlTrainDetail" class="ml-train-detail">--</pre>
+              </div>
+              <div class="ml-status-card" id="rssDedupReportCard">
+                <div class="ml-status-head">
+                  <strong id="rssDedupTitle">&#x53BB;&#x91CD;&#x62A5;&#x544A;&#x9762;&#x677F;</strong>
+                  <span class="muted" id="rssDedupTime">--</span>
+                </div>
+                <p id="rssDedupSummary" class="muted">&#x5C1A;&#x672A;&#x6267;&#x884C;&#x624B;&#x52A8;&#x53BB;&#x91CD;&#x3002;</p>
+                <pre id="rssDedupDetail" class="ml-train-detail">--</pre>
+              </div>
+              <ul class="mini-list roomy">
+                <li>当前样本：<strong id="rssMlSampleCount">--</strong></li>
+                <li>当前模型：<strong id="rssMlModelVersion">--</strong></li>
+                <li>下次自动训练：<strong id="rssMlNextAutoTrain">--</strong></li>
+                <li>最近损失：<strong id="rssMlLatestLoss">--</strong></li>
+              </ul>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <h3>模型训练可视化</h3>
+                <span class="muted">train/val loss 趋势</span>
+              </div>
+              <div id="rssMlTrainChart" class="chart large"></div>
+              <div id="rssMlClassMetrics" class="table-wrap"></div>
+              <div id="rssMlConfusionMatrix" class="table-wrap"></div>
+              <ul id="rssMlRunsList" class="mini-list roomy"></ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="feeds">
+          <div class="grid layout-2-3">
+            <article class="panel form-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>RSS 源配置</h3>
+                  <p class="muted">可增删源地址，定时抓取后按事件类型分类展示</p>
+                </div>
+                <div class="panel-actions">
+                  <button id="fetchRssBtn" type="button" class="ghost-btn">立即获取RSS消息</button>
+                  <button id="addFeedBtn" type="button" class="ghost-btn">新增 RSS 源</button>
+                </div>
+              </div>
+              <form id="feedSettingsForm" class="settings-form">
+                <label>
+                  <span>RSS 监控频率 (秒)</span>
+                  <input id="rssIntervalInput" type="number" min="30" />
+                </label>
+                <div id="feedRows" class="stack-list"></div>
+                <button type="submit" class="primary-btn">保存 RSS 配置</button>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>RSS 事件流</h3>
+                  <p class="muted">按政治缓和 / 战争进度分类，标题和摘要已尽量转中文</p>
+                </div>
+                <div class="rss-filter">
+                  <button class="filter-btn active" data-event-filter="all">全部</button>
+                  <button class="filter-btn" data-event-filter="political">政治缓和</button>
+                  <button class="filter-btn" data-event-filter="war">战争进度</button>
+                </div>
+              </div>
+              <div id="feedEventList" class="event-list spacious"></div>
+              <div id="feedEventsPager" class="pager"></div>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>RSS 抓取记录</h3>
+                <span class="muted">单独记录 RSS 轮次、耗时和异常数</span>
+              </div>
+              <ul id="rssFetchRunsList" class="mini-list roomy"></ul>
+              <div id="rssFetchRunsPager" class="pager"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>命中关键词</h3>
+                <span class="muted">帮助确认事件为什么被归类</span>
+              </div>
+              <div id="eventKeywordList" class="keyword-board"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" data-view-panel="push">
+          <div class="grid layout-2-3">
+            <article class="panel form-panel">
+              <div class="panel-head">
+                <div>
+                  <h3>推送组配置</h3>
+                  <p class="muted">每组由 webhook + secret 组成，可启停、可增删</p>
+                </div>
+                <button id="addTargetBtn" type="button" class="ghost-btn">新增推送组</button>
+              </div>
+              <form id="notificationSettingsForm" class="settings-form">
+                <div id="targetRows" class="stack-list"></div>
+                <button type="submit" class="primary-btn">保存推送设置</button>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>推送说明</h3>
+                  <p class="muted">程序只推送 1 / 2 级反转信号，3 / 4 级只记录不推送</p>
+                </div>
+              </div>
+              <div class="notice-stack">
+                <div class="notice-card level-1">
+                  <strong>一级反转</strong>
+                  <span>price + political + war + us10y 同时命中，优先级最高。</span>
+                </div>
+                <div class="notice-card level-2">
+                  <strong>二级反转</strong>
+                  <span>四类条件中命中三类，说明共振较强。</span>
+                </div>
+                <div class="notice-card level-3">
+                  <strong>三级反转</strong>
+                  <span>四类条件中命中两类，用于提示观察。</span>
+                </div>
+                <div class="notice-card level-4">
+                  <strong>四级反转</strong>
+                  <span>四类条件中仅命中一类，仅记录不推送。</span>
+                </div>
+                <div class="notice-card level-0">
+                  <strong>无信号</strong>
+                  <span>仅记录，不触发推送。</span>
+                </div>
+              </div>
+            </article>
+          </div>
+          <article class="panel">
+            <div class="panel-head">
+              <h3>推送记录</h3>
+              <span class="muted">记录每次推送目标、结果和消息内容</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>类型</th>
+                    <th>目标</th>
+                    <th>结果</th>
+                    <th>内容</th>
+                  </tr>
+                </thead>
+                <tbody id="notificationLogsBody"></tbody>
+              </table>
+            </div>
+            <div id="notificationLogsPager" class="pager"></div>
+          </article>
+        </section>
+
+        <section class="view" data-view-panel="system">
+          <div class="stats-grid system-grid">
+            <article class="panel stat-card">
+              <span class="label">SGE 当前状态</span>
+              <strong id="systemSgeState">--</strong>
+              <span id="systemSgeMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">黄金盘面状态</span>
+              <strong id="systemReversalState">--</strong>
+              <span id="systemReversalMeta" class="muted">等待数据</span>
+            </article>
+            <article class="panel stat-card">
+              <span class="label">RSS 状态</span>
+              <strong id="systemRssState">--</strong>
+              <span id="systemRssMeta" class="muted">等待数据</span>
+            </article>
+          </div>
+
+          <div class="grid two-col">
+            <article class="panel">
+              <div class="panel-head">
+                <h3>SGE 抓取记录</h3>
+                <span class="muted">分页展示历史记录，当前状态以上方状态卡为准</span>
+              </div>
+              <ul id="fetchRunsList" class="mini-list roomy"></ul>
+              <div id="fetchRunsPager" class="pager"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-head">
+                <h3>反转运行记录</h3>
+                <span class="muted">分页展示历史记录，当前状态以上方状态卡为准</span>
+              </div>
+              <ul id="reversalRunsList" class="mini-list roomy"></ul>
+              <div id="reversalRunsPager" class="pager"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="updateLogModal" class="update-log-modal hidden" role="dialog" aria-modal="true" aria-labelledby="updateLogTitle">
+      <div class="update-log-backdrop" data-close-update-log></div>
+      <section class="update-log-panel">
+        <header class="update-log-head">
+          <h3 id="updateLogTitle">更新记录</h3>
+          <button id="closeUpdateLogBtn" class="text-btn" type="button">关闭</button>
+        </header>
+        <div class="update-log-actions">
+          <button id="addUpdateLogEntryBtn" class="primary-btn" type="button">新增记录</button>
+          <button id="clearUpdateLogBtn" class="ghost-btn" type="button">清空记录</button>
+        </div>
+        <div id="updateLogList" class="update-log-list"></div>
+      </section>
+    </div>
+
+    <template id="feedRowTemplate">
+      <div class="editor-row">
+        <div class="editor-head">
+          <strong>RSS 源</strong>
+          <button type="button" class="text-btn remove-feed-btn">删除</button>
+        </div>
+        <div class="inline-form">
+          <label>
+            <span>备注名称</span>
+            <input type="text" class="feed-name-input" placeholder="例如：金十数据" />
+          </label>
+          <label class="toggle-field">
+            <span>启用</span>
+            <input type="checkbox" class="feed-enabled-input" checked />
+          </label>
+        </div>
+        <label>
+          <span>地址</span>
+          <input type="url" class="feed-url-input" placeholder="https://example.com/feed.xml" />
+        </label>
+      </div>
+    </template>
+
+    <template id="targetRowTemplate">
+      <div class="editor-row">
+        <div class="editor-head">
+          <strong>推送组</strong>
+          <button type="button" class="text-btn remove-target-btn">删除</button>
+        </div>
+        <div class="inline-form">
+          <label>
+            <span>名称</span>
+            <input type="text" class="target-name-input" placeholder="默认机器人" />
+          </label>
+          <label class="toggle-field">
+            <span>启用</span>
+            <input type="checkbox" class="target-enabled-input" checked />
+          </label>
+        </div>
+        <label>
+          <span>Webhook</span>
+          <input type="url" class="target-webhook-input" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." />
+        </label>
+        <label>
+          <span>Secret</span>
+          <input type="password" class="target-secret-input" placeholder="SEC..." />
+        </label>
+      </div>
+    </template>
+
+    <script src="/static/app.js?v=0.30.5"></script>
+  </body>
+</html>
